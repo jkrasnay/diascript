@@ -327,6 +327,92 @@ class Vbox extends Box {
 
 
 
+/**
+ * Box that stacks its children horizontally.
+ */
+class Hbox extends Box {
+
+  constructor(props, ...children) {
+    super(props, ...children);
+  }
+
+  layout() {
+
+    var contentWidth = 0;
+    var contentHeight = 0;
+    this.children.forEach((child, i) =>
+      {
+        if (i > 0) {
+          contentWidth += this.props.spacing || 0;
+        }
+        child.layout();
+        if (child.height > contentHeight) {
+          contentHeight = child.height;
+        }
+        contentWidth += child.width;
+      });
+
+    var extraSpaceH;
+    if (this.props.width === undefined) {
+      extraSpaceH = 0;
+    } else {
+      extraSpaceH = this.props.width - this.paddingLeft() - this.paddingRight() - contentWidth;
+    }
+
+    var leftSpace;
+    switch (this.props.align) {
+      case 'left':
+        leftSpace = 0;
+        break;
+      case 'right':
+        leftSpace = extraSpaceH;
+        break;
+      default:
+        leftSpace = extraSpaceH / 2;
+    }
+
+    var x = this.paddingLeft() + leftSpace;
+    this.children.forEach((child, i) =>
+      {
+        if (i > 0) {
+          x += this.props.spacing || 0;
+        }
+
+        var extraSpaceV;
+        if (this.props.height === undefined) {
+          extraSpaceV = contentHeight - child.height;
+        } else {
+          extraSpaceV = this.props.height - this.paddingTop() - this.paddingBottom() - child.height;
+        }
+
+        var topSpace;
+        switch (this.props.valign) {
+          case 'top':
+            topSpace = 0;
+            break;
+          case 'bottom':
+            topSpace = extraSpaceV;
+            break;
+          default:
+            topSpace = extraSpaceV / 2;
+        }
+
+        child.x = x;
+        child.y = this.paddingTop() + topSpace;
+
+        x += child.width;
+
+      });
+
+    this.width = this.props.width || (x +  this.paddingRight());
+    this.height = this.props.height || (contentHeight + this.paddingTop() + this.paddingBottom());
+
+  }
+
+}
+
+
+
 function appendSvgElement(parent, [ tag, attrs, ...children ]) {
   const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
   parent.appendChild(el);
