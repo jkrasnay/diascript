@@ -1,13 +1,67 @@
+//
+// DiaScript
+//
+// A DiaScript diagram consists of an array of shapes and an array of lines.
+//
+// A shape is a JavaScript object that implements two methods: `layout` and `render`.
+//
+// `layout` is a no-args method that calculates the `width` and `height`
+// properties of the shape. If the shape is a container for other shapes,
+// `layout` is responsible for calling `layout` on its children and also for
+// setting the `x` and `y` properties on its children (it may also set `width`
+// and/or `height` on its children.)
+//
+// `render` is a method of two args, `x` and `y`, that returns a list of SVG
+// "pseudo-elements" representing the shape based on the shape's `x`, `y`, `width`,
+// and `height` properties, along with any other properties supported by the
+// particular shape.
+//
+// A pseudo-element is a JavaScript array with two or three elements, `tag`,
+// `attrs`, and `text`, representing an SVG element.
+//
+// Each top-level shape must have either `x` and `y` properties set, indicating
+// the position of the top-level corner of the shape within the SVG element.
+//
+// Alternatively, the top-level shape may have an `align` attribute that is an
+// array of three attributes: `id`, `dx`, and `dy`.  DiaScript will position
+// the shape relative to another shape with ID `id`, with this shape's center
+// being positioned at offset `(dx, dy)` relative to the center of the other shape.
+//
+// A line is a JavaScript object with the properties `from` and `to` that
+// implements a `render` method.  `from` and `to` each contain the ID of a
+// shape that the line joins. `render` takes two args, `from` and `to`, each of
+// which is an array of two numbers, `x` and `y`, indicating the position of an
+// end of the line.  `render` returns an array of SVG pseudo-elements based on
+// `from` and `to`, as well as any other properties supported by that line type.
+//
+
 /**
  * Text element.
  */
 class Text {
 
+  /**
+   * Creates a text element.  Text wrapping is not supported.  Instead, you
+   * can add multiple Text objects into a Vbox.
+   *
+   * @param {object} props
+   * @param {string} [props.fill=black] - Color with which to draw the text.
+   * @param {string} [props.font_weight=normal] - Font weight, e.g. 'bold'.
+   * @param {string} [props.font_size=16] - Font size in SVG units.
+   * @param {string} text - Text to render.
+   */
   constructor(props, text) {
     this.props = props;
     this.text = text;
   }
 
+
+  /**
+   * Returns the SVG attributes for this element, applying defaults as required.
+   *
+   * @param {number} x - X-coordinate of the left edge of the shape.
+   * @param {number} y - Y-coordinate of the top edge of the shape.
+   */
   attrs(x, y) {
     return {
       x: x + (this.x || 0),
@@ -18,6 +72,14 @@ class Text {
     };
   }
 
+
+  /**
+   * Returns the bounding box for this text, which is an object with `width`
+   * and `height` properties.
+   *
+   * Uses a hidden SVG element on the page to render and measure the text
+   * element.
+   */
   bbox() {
     var measureSvg = document.getElementById('measureSvg');
     if (!measureSvg) {
@@ -41,12 +103,20 @@ class Text {
     return textEl.getBBox();
   }
 
+
+  /**
+   * Sets the width and height properties of the shape.
+   */
   layout() {
     const bbox = this.bbox();
     this.width = bbox.width;
     this.height = bbox.height;
   }
 
+
+  /**
+   * Returns an array of pseudo-SVG elements for this shape.
+   */
   render(x, y) {
     return [['text', this.attrs(x, y), this.text]];
   }
@@ -62,6 +132,25 @@ class Text {
  */
 class Box {
 
+
+  /**
+   * Creates a box shape.
+   *
+   * @param {object} props
+   * @param {string} [props.align=center] - Horizontal alignment of content: 'left', 'center', 'right'.  Ignored unless `props.width` is set.
+   * @param {string} [props.fill=white] - Fill color for the shape.
+   * @param {number} [props.height] - Height of the box. By default, calculated from content and padding.
+   * @param {(number|number[])} [props.padding=0] - Padding inside the box, in SVG units.
+   * Padding specified as an array follows the CSS standard:
+   * 10 or [10] - Set all padding to 10.
+   * [10, 20] - Set vertical padding to 10 and horizontal padding to 20.
+   * [10, 20, 30] - Set top padding to 10, horizontal padding to 20, and bottom padding to 30.
+   * [10, 20, 30, 40] - Set top padding to 10, right padding to 20, bottom padding to 30, and left padding to 40.
+   * @param {string} [props.stroke=black] - Stroke color for the shape.
+   * @param {number} [props.stroke_width=1] - Stroke width for the shape.
+   * @param {number} [props.width] - Width of the box. By default, calculated from content and padding.
+   * @param {string} [props.valign=middle] - Vertical alignment of content: 'top', 'middle', 'bottom'.  Ignored unless `props.height` is set.
+   */
   constructor(props, ...children) {
     this.props = props;
     this.children = children;
