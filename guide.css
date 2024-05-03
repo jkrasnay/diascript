@@ -9,8 +9,14 @@ pre {
   font-size: 12px;
 }
 
+svg {
+  display: block;
+  margin: 32px auto 0;
+}
+
 .code-container {
   background-color: #f0f0f0;
   border-radius: 8px;
+  margin-bottom: 32px;
   padding: 8px;
 }

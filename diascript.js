@@ -62,6 +62,7 @@ class Diagram {
   }
 
   renderInto(el) {
+    this.el = el;
     this.shapes.forEach(shape =>
       {
         if (shape.props.x === undefined || shape.props.y === undefined) {
@@ -71,6 +72,24 @@ class Diagram {
           shape.render(0, 0).forEach(psvg => appendSvgElement(el, psvg));
         }
       });
+    return this;
+  }
+
+  shrinkWrap() {
+    if (!this.el) {
+      console.warn('Please call renderInto before calling shrinkWrap');
+    } else if (this.shapes.length === 0) {
+      console.warn("No shapes, can't shrinkWrap");
+    } else {
+      const left = Math.max(0, Math.min(...this.shapes.map(shape => shape.x)));
+      const top = Math.max(0, Math.min(...this.shapes.map(shape => shape.y)));
+      const right = Math.max(...this.shapes.map(shape => shape.x + shape.width));
+      const bottom = Math.max(...this.shapes.map(shape => shape.y + shape.height));
+      console.log(left, top, right, bottom, this.shapes);
+      this.el.setAttribute('width', left + right);
+      this.el.setAttribute('height', top + bottom);
+    }
+    return this;
   }
 
 }
@@ -375,6 +394,8 @@ class Vbox extends Box {
         y += child.height;
       });
 
+    this.x = this.props.x;
+    this.y = this.props.y;
     this.height = this.props.height || (y +  this.paddingBottom());
     this.width = this.props.width || (contentWidth + this.paddingLeft() + this.paddingRight());
 
@@ -461,6 +482,8 @@ class Hbox extends Box {
 
       });
 
+    this.x = this.props.x;
+    this.y = this.props.y;
     this.width = this.props.width || (x +  this.paddingRight());
     this.height = this.props.height || (contentHeight + this.paddingTop() + this.paddingBottom());
 
