@@ -8,13 +8,16 @@
 // `layout` is a no-args method that calculates the `width` and `height`
 // properties of the shape. If the shape is a container for other shapes,
 // `layout` is responsible for calling `layout` on its children and also for
-// setting the `x` and `y` properties on its children (it may also set `width`
-// and/or `height` on its children.)
+// setting the `dx` and `dy` properties on its children, indicating their
+// position relative to the parent shape. It may also set `width` and/or
+// `height` on its children.
 //
-// `render` is a method of two args, `x` and `y`, that returns a list of SVG
-// "pseudo-elements" representing the shape based on the shape's `x`, `y`, `width`,
-// and `height` properties, along with any other properties supported by the
-// particular shape.
+// `render` is a method of two args, `x` and `y`, indicating the absolute
+// position of the shape relative to the diagram. `render` stores its arguments
+// as the `x` and `y` properties on the object and returns a list of SVG
+// "pseudo-elements" representing the shape based on the shape's `x`, `y`,
+// `width`, and `height` properties, along with any other properties supported
+// by the particular shape.
 //
 // A pseudo-element is a JavaScript array with two or three elements, `tag`,
 // `attrs`, and `text`, representing an SVG element.
@@ -36,6 +39,25 @@
 //
 
 
+/**
+ * Returns an object with properties from `o` matching names in `ks`.
+ */
+function select(o, ks) {
+  const result = {};
+  ks.forEach(k =>
+    {
+      if (o[k] !== undefined) {
+        result[k] = o[k];
+      }
+    });
+  return result;
+}
+
+
+/**
+ * Creates an SVG element from the given pseudo element and appends
+ * it to the existing SVG element `parent`.
+ */
 function appendSvgElement(parent, [ tag, attrs, ...children ]) {
   const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
   parent.appendChild(el);
@@ -56,24 +78,48 @@ function appendSvgElement(parent, [ tag, attrs, ...children ]) {
 
 class Diagram {
 
+
   constructor(shapes, lines) {
     this.shapes = shapes;
     this.lines = lines;
+    console.log('diagram ctor', this.shapes);
   }
 
+
   renderInto(el) {
+
     this.el = el;
+
     this.shapes.forEach(shape =>
       {
-        if (shape.props.x === undefined || shape.props.y === undefined) {
+        if (shape.x === undefined || shape.y === undefined) {
           console.warn('Top-level shape requires x and y coordinates', shape);
         } else {
           shape.layout();
-          shape.render(0, 0).forEach(psvg => appendSvgElement(el, psvg));
+          shape.render(shape.x, shape.y).forEach(psvg => appendSvgElement(el, psvg));
         }
       });
+
+    console.log("after render", this.shapes);
+
+    // Problem with line rendering:
+    // Each line will have to find its `from` and `to` shapes by ID, which currently
+    // requires walking down from the top-level shapes, which would be slow for large diagrams.
+    // We could walk it once and index by id, but then we wouldn't have the absolute position
+    // of the shape.
+    //
+    // Perhaps shape.layout() should set the _absolute_ position when it lays out children
+    //
+    if (this.lines) {
+      this.lines.forEach(line =>
+        {
+          line.render(this).forEach(psvg => appendSvgElement(el, psvg));
+        });
+    }
+
     return this;
   }
+
 
   shrinkWrap() {
     if (!this.el) {
@@ -85,7 +131,6 @@ class Diagram {
       const top = Math.max(0, Math.min(...this.shapes.map(shape => shape.y)));
       const right = Math.max(...this.shapes.map(shape => shape.x + shape.width));
       const bottom = Math.max(...this.shapes.map(shape => shape.y + shape.height));
-      console.log(left, top, right, bottom, this.shapes);
       this.el.setAttribute('width', left + right);
       this.el.setAttribute('height', top + bottom);
     }
@@ -95,10 +140,48 @@ class Diagram {
 }
 
 
+
+class Shape {
+
+  constructor(props) {
+    for (const k in props) {
+      console.log('prop', k, props[k]);
+      this[k.replace('_', '-')] = props[k];
+    }
+  }
+
+  /**
+   * Returns an array of connection points for this shape.
+   *
+   * Each point is an array [x, y, nx, ny], where (nx, ny) forms a unit vector normal.
+   *
+   * By default, assumes a rectangular shape and returns the midpoints of each side.
+   */
+  connectionPoints() {
+
+    const x0 = this.x;
+    const x1 = this.x + this.width / 2;
+    const x2 = this.x + this.width;
+
+    const y0 = this.y;
+    const y1 = this.y + this.height / 2;
+    const y2 = this.y + this.height;
+
+    return [
+      [x1, y0, 0, -1],
+      [x2, y1, 1, 0],
+      [x1, y2, 0, 1],
+      [x0, y1, -1, 0]
+    ];
+
+  }
+
+}
+
 /**
  * Text element.
  */
-class Text {
+class Text extends Shape {
 
   /**
    * Creates a text element.  Text wrapping is not supported.  Instead, you
@@ -111,25 +194,17 @@ class Text {
    * @param {string} text - Text to render.
    */
   constructor(props, text) {
-    this.props = props;
+    super(props);
     this.text = text;
+    this.fill = this.fill || 'black';
   }
 
 
   /**
-   * Returns the SVG attributes for this element, applying defaults as required.
-   *
-   * @param {number} x - X-coordinate of the left edge of the shape.
-   * @param {number} y - Y-coordinate of the top edge of the shape.
+   * Returns the SVG attributes for this shape.
    */
-  attrs(x, y) {
-    return {
-      x: x + (this.x || 0),
-      y: y + (this.y || 0) + (this.height || 0) * 0.8,  // kludge to account for baseline
-      fill: this.props.fill || 'black',
-      'font-weight': this.props.font_weight || 'normal',
-      'font-size': this.props.font_size || 16,
-    };
+  attrs() {
+    return select(this, ['x', 'y', 'fill', 'font-weight', 'font-size']);
   }
 
 
@@ -154,10 +229,12 @@ class Text {
     }
     const textEl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
     measureSvg.appendChild(textEl);
-    const attrs = this.attrs(0, 0);
+    const attrs = this.attrs();
     for (var k in attrs) {
       textEl.setAttribute(k, attrs[k]);
     }
+    textEl.setAttribute('x', 0);
+    textEl.setAttribute('y', 0);
     const textNode = document.createTextNode(this.text);
     textEl.appendChild(textNode);
     return textEl.getBBox();
@@ -178,7 +255,9 @@ class Text {
    * Returns an array of pseudo-SVG elements for this shape.
    */
   render(x, y) {
-    return [['text', this.attrs(x, y), this.text]];
+    this.x = x;
+    this.y = y + this.height * 0.8;  // kludge to account for baseline
+    return [['text', this.attrs(), this.text]];
   }
 
 }
@@ -190,7 +269,7 @@ class Text {
  * Vbox and Hbox implement distinct layout() functions
  * but the rest of the implementation is here.
  */
-class Box {
+class Box extends Shape {
 
 
   /**
@@ -212,7 +291,12 @@ class Box {
    * @param {string} [props.valign=middle] - Vertical alignment of content: 'top', 'middle', 'bottom'.  Ignored unless `props.height` is set.
    */
   constructor(props, ...children) {
-    this.props = props;
+    super(props);
+    this.spacing = this.spacing || 0;
+    this.padding = this.padding || 0;
+    this.fill = this.fill || 'white';
+    this.stroke = this.stroke || 'black';
+    this['stroke-width'] = this['stroke-width'] || 0;
     this.children = children.map(child =>
       {
         if (typeof(child) === 'string') {
@@ -223,33 +307,17 @@ class Box {
       });
   }
 
-  attrs(x, y) {
-    var attrs = {
-      x: x + (this.props.x || this.x || 0),
-      y: y + (this.props.y || this.y || 0),
-      width: this.width,
-      height: this.height,
-      fill: this.props.fill || 'white',
-      stroke: this.props.stroke || 'black',
-      'stroke-width': this.props['stroke-width'] || this.props.stroke_width || 0,
-      'shapeRendering': 'geometricPrecision',
-    };
-    const supported = ['rx', 'ry', 'stroke-dasharray'];
-    supported.forEach(k =>
-      {
-        var v = this.props[k] || this.props[k.replace('-','_')];
-        if (v) {
-          attrs[k] = v;
-        }
-      });
-    return attrs;
+  attrs() {
+    const result = select(this, ['x', 'y', 'width', 'height', 'fill', 'rx', 'ry', 'stroke', 'stroke-dasharray', 'stroke-width']);
+    result.shapeRendering = 'geometricPrecision';
+    return result;
   }
 
   paddingNumber() {
-    if (!this.props.padding) {
+    if (!this.padding) {
       return 0;
-    } else if (typeof(this.props.padding) === 'number') {
-      return this.props.padding;
+    } else if (typeof(this.padding) === 'number') {
+      return this.padding;
     } else {
       return null;
     }
@@ -260,7 +328,7 @@ class Box {
     if (padding !== null) {
       return padding;
     } else {
-      return this.props.padding[0];
+      return this.padding[0];
     }
   }
 
@@ -268,10 +336,10 @@ class Box {
     var padding = this.paddingNumber();
     if (padding !== null) {
       return padding;
-    } else if (this.props.padding.length > 1) {
-      return this.props.padding[1];
+    } else if (this.padding.length > 1) {
+      return this.padding[1];
     } else {
-      return this.props.padding[0];
+      return this.padding[0];
     }
   }
 
@@ -279,14 +347,14 @@ class Box {
     var padding = this.paddingNumber();
     if (padding !== null) {
       return padding;
-    } else if (this.props.padding.length === 1) {
-      return this.props.padding[0];
-    } else if (this.props.padding.length === 2) {
-      return this.props.padding[0];
-    } else if (this.props.padding.length === 3) {
-      return this.props.padding[2];
+    } else if (this.padding.length === 1) {
+      return this.padding[0];
+    } else if (this.padding.length === 2) {
+      return this.padding[0];
+    } else if (this.padding.length === 3) {
+      return this.padding[2];
     } else {
-      return this.props.padding[2];
+      return this.padding[2];
     }
   }
 
@@ -294,23 +362,24 @@ class Box {
     var padding = this.paddingNumber();
     if (padding !== null) {
       return padding;
-    } else if (this.props.padding.length === 1) {
-      return this.props.padding[0];
-    } else if (this.props.padding.length === 2) {
-      return this.props.padding[1];
-    } else if (this.props.padding.length === 3) {
-      return this.props.padding[1];
+    } else if (this.padding.length === 1) {
+      return this.padding[0];
+    } else if (this.padding.length === 2) {
+      return this.padding[1];
+    } else if (this.padding.length === 3) {
+      return this.padding[1];
     } else {
-      return this.props.padding[3];
+      return this.padding[3];
     }
   }
 
   render(x, y) {
-    const attrs = this.attrs(x, y);
-    var result = [['rect', attrs]];
+    this.x = x;
+    this.y = y;
+    var result = [['rect', this.attrs()]];
     this.children.forEach(child =>
       {
-        result = result.concat(child.render(attrs.x, attrs.y));
+        result = result.concat(child.render(x + child.dx, y + child.dy));
       });
     return result;
   }
@@ -334,7 +403,7 @@ class Vbox extends Box {
     this.children.forEach((child, i) =>
       {
         if (i > 0) {
-          contentHeight += this.props.spacing || 0;
+          contentHeight += this.spacing;
         }
         child.layout();
         if (child.width > contentWidth) {
@@ -344,14 +413,14 @@ class Vbox extends Box {
       });
 
     var extraSpaceV;
-    if (this.props.height === undefined) {
+    if (this.height === undefined) {
       extraSpaceV = 0;
     } else {
-      extraSpaceV = this.props.height - this.paddingTop() - this.paddingBottom() - contentHeight;
+      extraSpaceV = this.height - this.paddingTop() - this.paddingBottom() - contentHeight;
     }
 
     var topSpace;
-    switch (this.props.valign) {
+    switch (this.valign) {
       case 'top':
         topSpace = 0;
         break;
@@ -366,18 +435,18 @@ class Vbox extends Box {
     this.children.forEach((child, i) =>
       {
         if (i > 0) {
-          y += this.props.spacing || 0;
+          y += this.spacing;
         }
 
         var extraSpaceH;
-        if (this.props.width === undefined) {
+        if (this.width === undefined) {
           extraSpaceH = contentWidth - child.width;
         } else {
-          extraSpaceH = this.props.width - this.paddingLeft() - this.paddingRight() - child.width;
+          extraSpaceH = this.width - this.paddingLeft() - this.paddingRight() - child.width;
         }
 
         var leftSpace;
-        switch (this.props.align) {
+        switch (this.align) {
           case 'left':
             leftSpace = 0;
             break;
@@ -388,16 +457,14 @@ class Vbox extends Box {
             leftSpace = extraSpaceH / 2;
         }
 
-        child.x = this.paddingLeft() + leftSpace;
-        child.y = y;
+        child.dx = this.paddingLeft() + leftSpace;
+        child.dy = y;
 
         y += child.height;
       });
 
-    this.x = this.props.x;
-    this.y = this.props.y;
-    this.height = this.props.height || (y +  this.paddingBottom());
-    this.width = this.props.width || (contentWidth + this.paddingLeft() + this.paddingRight());
+    this.height = this.height || (y +  this.paddingBottom());
+    this.width = this.width || (contentWidth + this.paddingLeft() + this.paddingRight());
 
   }
 
@@ -421,7 +488,7 @@ class Hbox extends Box {
     this.children.forEach((child, i) =>
       {
         if (i > 0) {
-          contentWidth += this.props.spacing || 0;
+          contentWidth += this.spacing;
         }
         child.layout();
         if (child.height > contentHeight) {
@@ -431,14 +498,14 @@ class Hbox extends Box {
       });
 
     var extraSpaceH;
-    if (this.props.width === undefined) {
+    if (this.width === undefined) {
       extraSpaceH = 0;
     } else {
-      extraSpaceH = this.props.width - this.paddingLeft() - this.paddingRight() - contentWidth;
+      extraSpaceH = this.width - this.paddingLeft() - this.paddingRight() - contentWidth;
     }
 
     var leftSpace;
-    switch (this.props.align) {
+    switch (this.align) {
       case 'left':
         leftSpace = 0;
         break;
@@ -453,18 +520,18 @@ class Hbox extends Box {
     this.children.forEach((child, i) =>
       {
         if (i > 0) {
-          x += this.props.spacing || 0;
+          x += this.spacing;
         }
 
         var extraSpaceV;
-        if (this.props.height === undefined) {
+        if (this.height === undefined) {
           extraSpaceV = contentHeight - child.height;
         } else {
-          extraSpaceV = this.props.height - this.paddingTop() - this.paddingBottom() - child.height;
+          extraSpaceV = this.height - this.paddingTop() - this.paddingBottom() - child.height;
         }
 
         var topSpace;
-        switch (this.props.valign) {
+        switch (this.valign) {
           case 'top':
             topSpace = 0;
             break;
@@ -475,17 +542,15 @@ class Hbox extends Box {
             topSpace = extraSpaceV / 2;
         }
 
-        child.x = x;
-        child.y = this.paddingTop() + topSpace;
+        child.dx = x;
+        child.dy = this.paddingTop() + topSpace;
 
         x += child.width;
 
       });
 
-    this.x = this.props.x;
-    this.y = this.props.y;
-    this.width = this.props.width || (x +  this.paddingRight());
-    this.height = this.props.height || (contentHeight + this.paddingTop() + this.paddingBottom());
+    this.width = this.width || (x +  this.paddingRight());
+    this.height = this.height || (contentHeight + this.paddingTop() + this.paddingBottom());
 
   }
 
