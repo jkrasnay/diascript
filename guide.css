@@ -1,0 +1,16 @@
+body {
+  font-family: Helvetica, Arial, sans-serif;
+  font-size: 16px;
+  margin: 16px auto;
+  max-width: 900px;
+}
+
+pre {
+  font-size: 12px;
+}
+
+.code-container {
+  background-color: #f0f0f0;
+  border-radius: 8px;
+  padding: 8px;
+}

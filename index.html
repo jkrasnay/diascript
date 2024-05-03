@@ -1,51 +1,98 @@
 <!doctype html>
 <html>
   <head>
-<style>
-body {
-  font-family: Helvetica, Arial, sans-serif;
-  font-size: 16px;
-</style>
+    <link rel="stylesheet" href="guide.css">
   </head>
   <body>
 
-    <script src="diascript.js"></script>
+    <h1>DiaScript Guide</h1>
 
-    <svg id="ex1" width="400" height="300" xmlns="http://www.w3.org/2000/svg">
-    </svg>
-    <script>
-      var el = document.getElementById('ex1');
-      renderInto(el, 10, 10,
-        new Vbox({ spacing: 10 },
-          new Vbox({ stroke_width: 1, padding: 10 },
-            new Text({}, "Hi,"),
-            new Text({}, "world!")),
-          new Vbox({ stroke_width: 1, padding: 10, width: 200 },
-            new Text({}, "Hello,"),
-            new Text({ font_weight: 'bold' }, "world!")),
-          new Vbox({ stroke_width: 1, padding: 10, height: 100 },
-            new Text({}, "Hello,"),
-            new Text({}, "world!"))
-        ));
-    </script>
+    <p>DiaScript is a tiny JavaScript library for creating SVG block diagrams.</p>
 
-    <svg id="ex2" width="400" height="300" xmlns="http://www.w3.org/2000/svg">
-    </svg>
-    <script>
-      var el = document.getElementById('ex2');
-      renderInto(el, 10, 10,
-        new Hbox({ spacing: 10 },
-          new Vbox({ stroke_width: 1, padding: 10 },
-            new Text({}, "Hi,"),
-            new Text({}, "world!")),
-          new Vbox({ stroke_width: 1, padding: 10, width: 200 },
-            new Text({}, "Hello,"),
-            new Text({ font_weight: 'bold' }, "world!")),
-          new Vbox({ stroke_width: 1, padding: 10, height: 100 },
-            new Text({}, "Hello,"),
-            new Text({}, "world!"))
-        ));
-    </script>
+    <p>Diagrams are mostly made of boxes.</p>
+
+    <div class="example">
+      <svg id="ex0" width="400" height="300" xmlns="http://www.w3.org/2000/svg">
+      </svg>
+      <script type="module">
+        import { diagram, vbox } from "./diascript.js";
+        const shapes = [
+          vbox({ x: 20, y: 20, width: 40, height: 40, stroke_width: 1 }),
+          vbox({ x: 80, y: 20, width: 60, height: 60, fill: '#ccc', rx: 8 }),
+          vbox({ x: 160, y: 20, width: 80, height: 80, stroke: '#ccc', stroke_width: 2, stroke_dasharray: '4' }),
+        ];
+        const el = document.getElementById('ex0');
+        diagram(shapes).renderInto(el);
+      </script>
+    </div>
+
+    <p>
+      Boxes can contain boxes. <code>vbox</code> and <code>hbox</code> lay out
+      their children vertically and horizontally, respectively.  The layout can
+      be controlled with the <code>padding</code> and <code>spacing</code>
+      properties.
+    </p>
+
+    <p>
+      Because of this, child boxes do not need <code>x</code> and
+      <code>y</code> coordinates.
+    </p>
+
+    <p>
+      If a container box doesn't have an explicit <code>height</code> and
+      <code>width</code>, it makes itself big enough to contain its children.
+    </p>
+
+    <div class="example">
+      <svg id="ex1" width="400" height="300" xmlns="http://www.w3.org/2000/svg">
+      </svg>
+      <script type="module">
+        import { diagram, vbox, hbox } from "./diascript.js";
+        const shapes = [
+          vbox({ x: 20, y: 20, stroke: "#999", stroke_width: 1, stroke_dasharray: 3, rx: 5, padding: 10, spacing: 10 },
+            vbox({ width: 40, height: 30, stroke_width: 1 }),
+            vbox({ width: 40, height: 30, stroke_width: 1 }),
+            vbox({ width: 40, height: 30, stroke_width: 1 }),
+          ),
+          hbox({ x: 120, y: 20, stroke: "#999", stroke_width: 1, stroke_dasharray: 3, rx: 5, padding: 10, spacing: 10 },
+            vbox({ width: 40, height: 30, stroke_width: 1 }),
+            vbox({ width: 40, height: 30, stroke_width: 1 }),
+            vbox({ width: 40, height: 30, stroke_width: 1 }),
+          ),
+        ];
+        const el = document.getElementById('ex1');
+        diagram(shapes).renderInto(el);
+      </script>
+    </div>
+
+    <p>
+      Boxes can also contain text.  The <code>align</code> and
+      <code>valign</code> properties control alignment. The <code>bold</code>
+      function is a convenient helper function for bold text.
+    </p>
+
+    <div class="example">
+      <svg id="ex2" width="800" height="300" xmlns="http://www.w3.org/2000/svg">
+      </svg>
+      <script type="module">
+        import { diagram, vbox, hbox, text, bold } from "./diascript.js";
+        const shapes = [
+          hbox({ x: 20, y: 20, spacing: 20 },
+            vbox({ padding: 10, stroke_width: 1 },
+              "Hello,",
+              text({ font_weight: 'bold', font_size: 20 }, "world!")),
+            vbox({ width: 200, height: 120, padding: 10, stroke_width: 1, align: "left", valign: "top" },
+              bold("Top Left")),
+            vbox({ width: 200, height: 120, padding: 10, stroke_width: 1, align: "right", valign: "bottom" },
+              bold("Bottom Right")),
+          ),
+        ];
+        const el = document.getElementById('ex2');
+        diagram(shapes).renderInto(el);
+      </script>
+    </div>
+
+    <script src="guide.js"></script>
 
   </body>
 </html>
