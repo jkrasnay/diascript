@@ -35,6 +35,47 @@
 // `from` and `to`, as well as any other properties supported by that line type.
 //
 
+
+function appendSvgElement(parent, [ tag, attrs, ...children ]) {
+  const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  parent.appendChild(el);
+  for (var k in attrs) {
+    el.setAttribute(k, attrs[k]);
+  }
+  children.forEach(child =>
+    {
+      if (typeof(child) === 'string') {
+        const textNode = document.createTextNode(child);
+        el.appendChild(textNode);
+      } else {
+        appendSvgElement(el, child);
+      }
+    });
+}
+
+
+class Diagram {
+
+  constructor(shapes, lines) {
+    this.shapes = shapes;
+    this.lines = lines;
+  }
+
+  renderInto(el) {
+    this.shapes.forEach(shape =>
+      {
+        if (shape.props.x === undefined || shape.props.y === undefined) {
+          console.warn('Top-level shape requires x and y coordinates', shape);
+        } else {
+          shape.layout();
+          shape.render(0, 0).forEach(psvg => appendSvgElement(el, psvg));
+        }
+      });
+  }
+
+}
+
+
 /**
  * Text element.
  */
@@ -153,20 +194,36 @@ class Box {
    */
   constructor(props, ...children) {
     this.props = props;
-    this.children = children;
+    this.children = children.map(child =>
+      {
+        if (typeof(child) === 'string') {
+          return new Text({}, child);
+        } else {
+          return child;
+        }
+      });
   }
 
   attrs(x, y) {
-    return {
+    var attrs = {
       x: x + (this.props.x || this.x || 0),
       y: y + (this.props.y || this.y || 0),
       width: this.width,
       height: this.height,
       fill: this.props.fill || 'white',
       stroke: this.props.stroke || 'black',
-      'stroke-width': this.props.stroke_width || 0,
+      'stroke-width': this.props['stroke-width'] || this.props.stroke_width || 0,
       'shapeRendering': 'geometricPrecision',
     };
+    const supported = ['rx', 'ry', 'stroke-dasharray'];
+    supported.forEach(k =>
+      {
+        var v = this.props[k] || this.props[k.replace('-','_')];
+        if (v) {
+          attrs[k] = v;
+        }
+      });
+    return attrs;
   }
 
   paddingNumber() {
@@ -413,25 +470,24 @@ class Hbox extends Box {
 
 
 
-function appendSvgElement(parent, [ tag, attrs, ...children ]) {
-  const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
-  parent.appendChild(el);
-  for (var k in attrs) {
-    el.setAttribute(k, attrs[k]);
-  }
-  children.forEach(child =>
-    {
-      if (typeof(child) === 'string') {
-        const textNode = document.createTextNode(child);
-        el.appendChild(textNode);
-      } else {
-        appendSvgElement(el, child);
-      }
-    });
+//--- Public API -----------------------------------------------------------------------------
+
+export function diagram(shapes, lines) {
+  return new Diagram(shapes, lines);
 }
 
+export function text(props, text) {
+  return new Text(props, text);
+}
 
-function renderInto(parent, x, y, shape) {
-  shape.layout();
-  shape.render(x, y).forEach(psvg => appendSvgElement(parent, psvg));
+export function bold(text) {
+  return new Text({ font_weight: 'bold' }, text);
+}
+
+export function vbox(props, ...children) {
+  return new Vbox(props, ...children);
+}
+
+export function hbox(props, ...children) {
+  return new Hbox(props, ...children);
 }
