@@ -39,6 +39,16 @@
 //
 
 
+//--- Utilities -----------------------------------------------------------------------------
+
+
+function distance([x0, y0], [x1, y1]) {
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+
 /**
  * Returns an object with properties from `o` matching names in `ks`.
  */
@@ -76,13 +86,14 @@ function appendSvgElement(parent, [ tag, attrs, ...children ]) {
 }
 
 
+//--- Diagram -----------------------------------------------------------------------------
+
 class Diagram {
 
 
   constructor(shapes, lines) {
     this.shapes = shapes;
     this.lines = lines;
-    console.log('diagram ctor', this.shapes);
   }
 
 
@@ -100,8 +111,6 @@ class Diagram {
         }
       });
 
-    console.log("after render", this.shapes);
-
     // Problem with line rendering:
     // Each line will have to find its `from` and `to` shapes by ID, which currently
     // requires walking down from the top-level shapes, which would be slow for large diagrams.
@@ -113,13 +122,26 @@ class Diagram {
     if (this.lines) {
       this.lines.forEach(line =>
         {
-          line.render(this).forEach(psvg => appendSvgElement(el, psvg));
+          const psvg = line.render(this);
+          if (psvg) {
+            appendSvgElement(el, psvg);
+          }
         });
     }
 
     return this;
   }
 
+
+  shapeById(id) {
+    for (let i = 0; i < this.shapes.length; i++) {
+      const result = this.shapes[i].shapeById(id);
+      if (result) {
+        return result;
+      }
+    }
+    return null;
+  }
 
   shrinkWrap() {
     if (!this.el) {
@@ -140,12 +162,13 @@ class Diagram {
 }
 
 
+//--- Shapes -----------------------------------------------------------------------------
+
 
 class Shape {
 
   constructor(props) {
     for (const k in props) {
-      console.log('prop', k, props[k]);
       this[k.replace('_', '-')] = props[k];
     }
   }
@@ -174,6 +197,25 @@ class Shape {
       [x0, y1, -1, 0]
     ];
 
+  }
+
+  /**
+   * Returns the shape with the given id, or null.
+   */
+  shapeById(id) {
+    if (this.id === id) {
+      return this;
+    } else if (this.children) {
+      for (let i = 0; i < this.children.length; i++) {
+        const result = this.children[i].shapeById(id);
+        if (result) {
+          return result;
+        }
+      }
+      return null;
+    } else {
+      return null;
+    }
   }
 
 }
@@ -557,6 +599,65 @@ class Hbox extends Box {
 }
 
 
+//--- Lines -----------------------------------------------------------------------------
+
+
+class Line {
+
+  constructor(props) {
+    for (const k in props) {
+      this[k.replace('_', '-')] = props[k];
+    }
+    this.stroke = this.stroke || 'black';
+  }
+
+  svgAttrs() {
+    return select(this, ['stroke', 'stroke-width', 'stroke-dasharray']);
+  }
+
+  render(diagram) {
+    if (this.from === undefined) {
+      console.warn("Line is missing 'from' attribute", this);
+    } else if (this.to === undefined) {
+      console.warn("Line is missing 'to' attribute", this);
+    } else {
+      const fromShape = diagram.shapeById(this.from);
+      const toShape = diagram.shapeById(this.to);
+      if (!fromShape) {
+        console.warn(`Can't find line's 'from' shape ${this.from}`, this);
+      } else if (!toShape) {
+        console.warn(`Can't find line's 'to' shape ${this.to}`, this);
+      } else {
+        const fromPoints = fromShape.connectionPoints();
+        const toPoints = toShape.connectionPoints();
+        const pairs = [];
+        fromPoints.forEach(fp =>
+          {
+            toPoints.forEach(tp =>
+              {
+                pairs.push([ fp, tp, distance(fp, tp) ]);
+              })
+          });
+        let fromPoint, toPoint, dist = 1000000;
+        pairs.forEach(([fp, tp, d]) =>
+          {
+            if (d < dist) {
+              dist = d;
+              fromPoint = fp;
+              toPoint = tp;
+            }
+          });
+
+        const [x0, y0] = fromPoint;
+        const [x1, y1] = toPoint;
+        const attrs = this.svgAttrs();
+        attrs.d = `M${x0},${y0} L${x1},${y1}`;
+        return ['path', attrs];
+      }
+    }
+  }
+
+}
 
 //--- Public API -----------------------------------------------------------------------------
 
@@ -578,4 +679,8 @@ export function vbox(props, ...children) {
 
 export function hbox(props, ...children) {
   return new Hbox(props, ...children);
+}
+
+export function line(props) {
+  return new Line(props);
 }
