@@ -66,23 +66,28 @@ function select(o, ks) {
 
 /**
  * Creates an SVG element from the given pseudo element and appends
- * it to the existing SVG element `parent`.
+ * it to the existing SVG element `parent`.  Ignores cases where
+ * psvg is null or undefined, allowing us to avoid checks elsewhere
+ * in the code.
  */
-function appendSvgElement(parent, [ tag, attrs, ...children ]) {
-  const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
-  parent.appendChild(el);
-  for (var k in attrs) {
-    el.setAttribute(k, attrs[k]);
+function appendSvgElement(parent, psvg) {
+  if (psvg) {
+    const [ tag, attrs, ...children ] = psvg;
+    const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    parent.appendChild(el);
+    for (var k in attrs) {
+      el.setAttribute(k, attrs[k]);
+    }
+    children.forEach(child =>
+      {
+        if (typeof(child) === 'string') {
+          const textNode = document.createTextNode(child);
+          el.appendChild(textNode);
+        } else {
+          appendSvgElement(el, child);
+        }
+      });
   }
-  children.forEach(child =>
-    {
-      if (typeof(child) === 'string') {
-        const textNode = document.createTextNode(child);
-        el.appendChild(textNode);
-      } else {
-        appendSvgElement(el, child);
-      }
-    });
 }
 
 
@@ -122,9 +127,9 @@ class Diagram {
     if (this.lines) {
       this.lines.forEach(line =>
         {
-          const psvg = line.render(this);
-          if (psvg) {
-            appendSvgElement(el, psvg);
+          const paths = line.render(this);
+          if (paths) {
+            paths.forEach(psvg => appendSvgElement(el, psvg));
           }
         });
     }
@@ -162,23 +167,58 @@ class Diagram {
 }
 
 
-//--- Shapes -----------------------------------------------------------------------------
+/**
+ * Base class for shapes and lines.
+ */
+class Graphic {
 
-
-class Shape {
-
+  /**
+   * Constructor.  Copies properties from `props` to `this`. Replaces
+   * underscores with dashes in property names so we can, for example, specify
+   * `stroke_width` in `props` and have it end up being `stroke-width` in
+   * `this.
+   */
   constructor(props) {
     for (const k in props) {
       this[k.replace('_', '-')] = props[k];
     }
   }
 
+}
+
+//--- Shapes -----------------------------------------------------------------------------
+
+
+/**
+ * Base class for all shapes.  All shapes must implement two methods:
+ * `layout()` and `render(x,y)`.
+ *
+ * `layout` calculates the size of the shape and sets the `height` and `width`
+ * properties on `this` accordingly. Shapes that contain children will
+ * typically call `layout` on their children, then set `dx` and `dy` on each
+ * child to indicate the position of the child relative to this parent.
+ *
+ * `render(x,y)` saves its arguments in the `x` and `y` properties of `this`
+ * and returns an array of SVG pseudo-elements that render the shape.  Shapes
+ * with children should propagate the render call to each child using the
+ * child's `dx` and `dy` properties set during `layout` and adding each child's
+ * returned SVG pseudo-elements to its own `render` result.
+ *
+ */
+class Shape extends Graphic {
+
+  constructor(props) {
+    super(props);
+  }
+
   /**
    * Returns an array of connection points for this shape.
    *
-   * Each point is an array [x, y, nx, ny], where (nx, ny) forms a unit vector normal.
+   * Each point is an array [x, y, nx, ny], where (nx, ny) forms a unit vector
+   * normal pointing away from the boundary of the shape.
    *
-   * By default, assumes a rectangular shape and returns the midpoints of each side.
+   * By default, assumes a rectangular shape and returns the midpoints of each
+   * side.
    */
   connectionPoints() {
 
@@ -200,7 +240,8 @@ class Shape {
   }
 
   /**
-   * Returns the shape with the given id, or null.
+   * Returns the shape with the given id, traversing into child shapes if
+   * required, or null.
    */
   shapeById(id) {
     if (this.id === id) {
@@ -283,9 +324,6 @@ class Text extends Shape {
   }
 
 
-  /**
-   * Sets the width and height properties of the shape.
-   */
   layout() {
     const bbox = this.bbox();
     this.width = bbox.width;
@@ -293,9 +331,6 @@ class Text extends Shape {
   }
 
 
-  /**
-   * Returns an array of pseudo-SVG elements for this shape.
-   */
   render(x, y) {
     this.x = x;
     this.y = y + this.height * 0.8;  // kludge to account for baseline
@@ -602,6 +637,34 @@ class Hbox extends Box {
 //--- Lines -----------------------------------------------------------------------------
 
 
+/**
+ * Returns the array [fromPoint, toPoint] representing the closest two
+ * connection points from fromShape and toShape.
+ */
+function findConnectionPoints(fromShape, toShape) {
+  const fromPoints = fromShape.connectionPoints();
+  const toPoints = toShape.connectionPoints();
+  const pairs = [];
+  fromPoints.forEach(fp =>
+    {
+      toPoints.forEach(tp =>
+        {
+          pairs.push([ fp, tp, distance(fp, tp) ]);
+        })
+    });
+  let fromPoint, toPoint, dist = 1000000;
+  pairs.forEach(([fp, tp, d]) =>
+    {
+      if (d < dist) {
+        dist = d;
+        fromPoint = fp;
+        toPoint = tp;
+      }
+    });
+  return [fromPoint, toPoint];
+}
+
+
 class Line {
 
   constructor(props) {
@@ -613,6 +676,21 @@ class Line {
 
   svgAttrs() {
     return select(this, ['stroke', 'stroke-width', 'stroke-dasharray']);
+  }
+
+  renderMarker(markerId, thisPoint, otherPoint) {
+    const [x1, y1] = thisPoint;
+    const [x0, y0] = otherPoint;
+    if (markerId) {
+      const marker = markers[markerId];
+      if (!marker) {
+        console.warn('No such marker', markerId, this);
+      } else {
+        const d = distance(thisPoint, otherPoint);
+        const markerPoint = [x1, y1, (x0 - x1) / d, (y0 - y1) / d];
+        return marker.render(markerPoint);
+      }
+    }
   }
 
   render(diagram) {
@@ -628,36 +706,129 @@ class Line {
       } else if (!toShape) {
         console.warn(`Can't find line's 'to' shape ${this.to}`, this);
       } else {
-        const fromPoints = fromShape.connectionPoints();
-        const toPoints = toShape.connectionPoints();
-        const pairs = [];
-        fromPoints.forEach(fp =>
-          {
-            toPoints.forEach(tp =>
-              {
-                pairs.push([ fp, tp, distance(fp, tp) ]);
-              })
-          });
-        let fromPoint, toPoint, dist = 1000000;
-        pairs.forEach(([fp, tp, d]) =>
-          {
-            if (d < dist) {
-              dist = d;
-              fromPoint = fp;
-              toPoint = tp;
-            }
-          });
 
+        const [fromPoint, toPoint] = findConnectionPoints(fromShape, toShape);
         const [x0, y0] = fromPoint;
         const [x1, y1] = toPoint;
+
         const attrs = this.svgAttrs();
         attrs.d = `M${x0},${y0} L${x1},${y1}`;
-        return ['path', attrs];
+
+        return [
+          ['path', attrs],
+          this.renderMarker(this['from-marker'], fromPoint, toPoint),
+          this.renderMarker(this['to-marker'], toPoint, fromPoint),
+        ];
+
       }
     }
   }
 
 }
+
+
+//--- Markers -----------------------------------------------------------------------------
+
+
+/**
+ * A marker is a shape that is drawn at the end of a line.
+ *
+ */
+class Marker extends Graphic {
+
+  constructor(props) {
+    super(props);
+  }
+
+  /**
+   * Returns a pseudo-SVG element representing the marker at the given point.
+   *
+   * `point` is a four-element array in the form `[x, y, nx, ny]`, where (x,y)
+   * is the tip of the marker touching the shape, and (nx,ny) is a normal
+   * normal vector in the direction of the connecting line.
+   *
+   * This implementation delegates to a member `path()` to return the value
+   * of a `d` element for a path that draws the marker.  This method should
+   * render the marker with the tip at the origin and the marker drawn along
+   * the positive x-axis.
+   */
+  render(point) {
+
+    let [x, y, nx, ny] = point;
+
+    let attrs = select(this, ['fill', 'stroke', 'stroke-width']);
+    attrs.d = this.path();
+    attrs.transform = `matrix(${nx}, ${ny}, ${-ny}, ${nx}, ${x}, ${y})`;
+    return ['path', attrs];
+
+    // Rotating the Marker
+    //
+    // The code above rotates the marker based on the normal vector (nx,ny)
+    // via the matrix transform.
+    //
+    // The standard rotation matrix looks like this:
+    //
+    //   cos θ   - sin θ
+    //   sin θ     cos θ
+    //
+    // We know that sin θ = y / h and cos θ = x / h and that for unit vectors
+    // h = 1, therefore the rotation matrix is:
+    //
+    //   x    -y
+    //   y     x
+    //
+    // The matrix transform is defined in terms of the variables a-f representing
+    // the following transform
+    //
+    //   a   c   e
+    //   b   d   f
+    //   0   0   1
+    //
+    // In this form, a-d represent the rotation about the origin and (e,f)
+    // represents a translation.  So if we start by rendering the arrow at the
+    // origin we can rotate it and translate it to the final position in one neat
+    // matrix operation:
+    //
+    //    nx   -ny    x
+    //    ny    nx    y
+    //    0     0     1
+    //
+    // or in terms of the matrix transform:
+    //
+    // matrix(nx, ny, -ny, nx, x, y)
+    //
+
+
+  }
+
+}
+
+
+class Arrow extends Marker {
+
+  constructor(props) {
+    super(props);
+    this.length = this.length || 12;
+    this.width = this.width || 8;
+  }
+
+
+  // See https://dragonman225.js.org/curved-arrows.html
+
+  path() {
+    return `M0 0 L${this.length} ${this.width / 2} L${this.length} ${-this.width / 2}`;
+  }
+
+}
+
+
+/**
+ * Global registry of markers.
+ */
+const markers = {
+  'arrow': new Arrow({ fill: 'black' }),
+}
+
 
 //--- Public API -----------------------------------------------------------------------------
 

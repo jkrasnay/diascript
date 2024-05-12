@@ -93,35 +93,79 @@
     </div>
 
     <p>
-      Lines
+      Lines...
     </p>
 
     <div class="example">
       <svg id="ex3" width="800" height="300" xmlns="http://www.w3.org/2000/svg">
       </svg>
       <script type="module">
+
         import { diagram, vbox, hbox, line } from "./diascript.js";
+
+        function box(id) {
+          return vbox({ id: id, width: 80, height: 60, stroke_width: 1 }, id);
+        }
+
         const shapes = [
           hbox({ x: 20, y: 20, spacing: 120 },
-            vbox({ id: 'a', width: 80, height: 60, stroke_width: 1 }),
+            box('a'),
             vbox({ spacing: 80 },
-              vbox({ id: 'b', width: 80, height: 60, stroke_width: 1 }),
-              vbox({ id: 'c', width: 80, height: 60, stroke_width: 1 }),
-            ),
-            vbox({ id: 'd', width: 80, height: 60, stroke_width: 1 }),
-          ),
+              box('b'),
+              box('c')),
+            box('d'))
         ];
+
         const lines = [
           line({ from: 'a', to: 'b' }),
           line({ from: 'a', to: 'c', stroke: 'red' }),
           line({ from: 'b', to: 'd', stroke_width: 2 }),
           line({ from: 'c', to: 'd', stroke_dasharray: 3 }),
         ];
+
         const el = document.getElementById('ex3');
+
         diagram(shapes, lines).renderInto(el).shrinkWrap();
+
       </script>
     </div>
 
+
+    <p>Markers...</p>
+
+    <div class="example">
+      <svg id="ex4" width="800" height="300" xmlns="http://www.w3.org/2000/svg">
+      </svg>
+      <script type="module">
+
+        import { diagram, vbox, hbox, line } from "./diascript.js";
+
+        function box(id) {
+          return vbox({ id: id, width: 80, height: 60, stroke_width: 1 }, id);
+        }
+
+        const shapes = [
+          hbox({ x: 20, y: 20, spacing: 120 },
+            box('a'),
+            vbox({ spacing: 80 },
+              box('b'),
+              box('c')),
+            box('d'))
+        ];
+
+        const lines = [
+          line({ from: 'a', to: 'b', to_marker: 'arrow' }),
+          line({ from: 'a', to: 'c', from_marker: 'arrow' }),
+          line({ from: 'b', to: 'd' }),
+          line({ from: 'c', to: 'd', from_marker: 'arrow', to_marker: 'arrow' }),
+        ];
+
+        const el = document.getElementById('ex4');
+
+        diagram(shapes, lines).renderInto(el).shrinkWrap();
+
+      </script>
+    </div>
     <script src="guide.js"></script>
 
   </body>
