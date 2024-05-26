@@ -166,6 +166,43 @@
 
       </script>
     </div>
+
+
+    <p>Shapes...</p>
+
+    <div class="example">
+      <svg id="ex5" width="800" height="300" xmlns="http://www.w3.org/2000/svg">
+      </svg>
+      <script type="module">
+
+        import { diagram, hbox, vbox, circle, ellipse, db, user } from "./diascript.js";
+
+        function box(id) {
+          return vbox({ id: id, width: 80, height: 60, stroke_width: 1 }, id);
+        }
+
+        const shapes = [
+          hbox({ x: 20, y: 20, spacing: 80 },
+          circle({}),
+          ellipse({ width: 100, height: 60 }, 'hello'),
+          vbox({},
+            db({ width: 60, height: 60}),
+            'DB'),
+          user({}))
+
+        ];
+
+        const lines = [
+        ];
+
+        const el = document.getElementById('ex5');
+
+        diagram(shapes, lines).renderInto(el).shrinkWrap();
+
+      </script>
+    </div>
+
+
     <script src="guide.js"></script>
 
   </body>

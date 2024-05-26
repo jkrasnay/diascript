@@ -634,6 +634,163 @@ class Hbox extends Box {
 }
 
 
+class Ellipse extends Shape {
+
+  constructor(props, child) {
+    super(props);
+    this.width = this.width || 60;
+    this.height = this.height || this.width;
+    this.fill = this.fill || 'white';
+    this.stroke = this.stroke || 'black';
+    this['stroke-width'] = this['stroke-width'] || 1;
+    if (typeof(child) === 'string') {
+      this.child = new Text({}, child);
+    } else if (child) {
+      this.child = child;
+    }
+  }
+
+  svgAttrs() {
+    const result = select(this, ['fill', 'stroke', 'stroke-dasharray', 'stroke-width']);
+    result.rx = this.width / 2;
+    result.ry = this.height / 2;
+    result.cx = this.x + result.rx;
+    result.cy = this.y + result.ry;
+    result.shapeRendering = 'geometricPrecision';
+    return result;
+  }
+
+  layout() {
+    if (this.child) {
+      this.child.layout();
+      this.child.dx = (this.width - this.child.width) / 2;
+      this.child.dy = (this.height - this.child.height) / 2;
+    }
+  }
+
+  render(x, y) {
+    this.x = x;
+    this.y = y;
+    var result = [['ellipse', this.svgAttrs()]];
+    if (this.child) {
+      result = result.concat(this.child.render(x + this.child.dx, y + this.child.dy));
+    }
+    return result;
+  }
+
+}
+
+
+
+class Database extends Shape {
+
+  constructor(props, child) {
+    super(props);
+    this.width = this.width || 60;
+    this.height = this.height || this.width;
+    this.fill = this.fill || 'white';
+    this.stroke = this.stroke || 'black';
+    this['stroke-width'] = this['stroke-width'] || 1;
+    if (typeof(child) === 'string') {
+      this.child = new Text({}, child);
+    } else if (child) {
+      this.child = child;
+    }
+  }
+
+  svgAttrs() {
+    const result = select(this, ['fill', 'stroke', 'stroke-dasharray', 'stroke-width']);
+    const dy = this.width / 4;
+    const [ x0, x1 ] = [ this.x, this.x + this.width ];
+    const [ y0, y1, y2, y3, y4 ] = [ this.y, this.y + dy, this.y + 2 * dy, this.y + this.height - dy, this.y + this.height ];
+    result.d = `M${x0} ${y1} L${x0} ${y3} C${x0} ${y4} ${x1} ${y4} ${x1} ${y3} L${x1} ${y1} C${x1} ${y0} ${x0} ${y0} ${x0} ${y1} C${x0} ${y2} ${x1} ${y2} ${x1} ${y1}`;
+    result.shapeRendering = 'geometricPrecision';
+    return result;
+  }
+
+  layout() {
+    if (this.child) {
+      this.child.layout();
+      this.child.dx = (this.width - this.child.width) / 2;
+      this.child.dy = (this.height - this.child.height) / 2;
+    }
+  }
+
+  render(x, y) {
+    this.x = x;
+    this.y = y;
+    var result = [['path', this.svgAttrs()]];
+    if (this.child) {
+      result = result.concat(this.child.render(x + this.child.dx, y + this.child.dy));
+    }
+    return result;
+  }
+
+}
+
+//       x0   x1  x2
+//          +---+         y0
+//          |   |         y1
+//          +---+         y2
+//            |
+//        ----+----       y3
+//            |
+//            +           y4
+//           / \
+//          /   \         y5
+//
+class User extends Shape {
+
+  constructor(props, child) {
+    super(props);
+    this.height = this.height || 80;
+    this.fill = this.fill || 'white';
+    this.stroke = this.stroke || 'black';
+    this['stroke-width'] = this['stroke-width'] || 1;
+  }
+
+  svgAttrs() {
+    const result = select(this, ['fill', 'stroke', 'stroke-dasharray', 'stroke-width']);
+    const hr = this.height * 0.15; // head radius
+    const dy = this.width / 4;
+    const [ x0, x1, x2 ] = [ this.x, this.x + this.width / 2, this.x + this.width ];
+    const [ y0, y1, y2, y3, y4, y5] = [
+      this.y,
+      this.y + hr,
+      this.y + 2 * hr,
+      this.y + this.height * 0.4,
+      this.y + this.height - 2 * hr,
+      this.y + this.height
+    ];
+    result.d = `M${x1} ${y2}
+    A ${hr} ${hr} 0 1 1 ${x1} ${y0}
+    A ${hr} ${hr} 0 0 1 ${x1} ${y2}
+    L ${x1} ${y4}
+    M ${x0} ${y3}
+    L ${x2} ${y3}
+    M ${x0} ${y5}
+    L ${x1} ${y4}
+    L ${x2} ${y5}
+    `;
+    //L${x0} ${y3} C${x0} ${y4} ${x1} ${y4} ${x1} ${y3} L${x1} ${y1} C${x1} ${y0} ${x0} ${y0} ${x0} ${y1} C${x0} ${y2} ${x1} ${y2} ${x1} ${y1}`;
+    result.shapeRendering = 'geometricPrecision';
+    return result;
+  }
+
+  layout() {
+    this.width = this.height * 0.5;
+  }
+
+  render(x, y) {
+    this.x = x;
+    this.y = y;
+    console.log('attrs', this.svgAttrs());
+    return [['path', this.svgAttrs()]];
+  }
+
+}
+
+
 //--- Lines -----------------------------------------------------------------------------
 
 
@@ -852,6 +1009,22 @@ export function hbox(props, ...children) {
   return new Hbox(props, ...children);
 }
 
+export function circle(props, child) {
+  return new Ellipse(props, child);
+}
+
+export function ellipse(props, child) {
+  return new Ellipse(props, child);
+}
+
+export function db(props, child) {
+  return new Database(props, child);
+}
+
 export function line(props) {
   return new Line(props);
+}
+
+export function user(props) {
+  return new User(props);
 }
