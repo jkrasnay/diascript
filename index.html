@@ -202,6 +202,45 @@
       </script>
     </div>
 
+    <p>
+      Top-level shapes can be positioned relative to another shape instead of
+      using an absolute position using the <code>align_to</code>, <code>dx</code>,
+      and <code>dy</code> properties.
+    </p>
+
+    <div class="example">
+      <svg id="ex6" width="800" height="300" xmlns="http://www.w3.org/2000/svg">
+      </svg>
+      <script type="module">
+
+        import { diagram, line, vbox, user } from "./diascript.js";
+
+        function box(id) {
+          return vbox({ id: id, width: 80, height: 60, stroke_width: 1 }, id);
+        }
+
+        const shapes = [
+          vbox({ x: 100, y: 20, stroke: "#999", stroke_width: 1, stroke_dasharray: 3, rx: 5, padding: 10, spacing: 10 },
+            vbox({ id: 'a', width: 40, height: 30, stroke_width: 1 }),
+            vbox({ id: 'b', width: 40, height: 30, stroke_width: 1 }),
+            vbox({ id: 'c', width: 40, height: 30, stroke_width: 1 })),
+          user({ id: 'u', align_to: 'b', dx: -120, dy: 0 }),
+          vbox({ id: 'd', align_to: 'b', dx: 120, dy: -50, width: 40, height: 30, stroke_width: 1 }),
+          vbox({ id: 'e', align_to: 'b', dx: 120, dy: 50, width: 40, height: 30, stroke_width: 1 })
+        ];
+
+        const lines = [
+          line({ from: 'u', to: 'b', to_marker: 'arrow' }),
+          line({ from: 'b', to: 'd', to_marker: 'arrow' }),
+          line({ from: 'b', to: 'e', to_marker: 'arrow' }),
+        ];
+
+        const el = document.getElementById('ex6');
+
+        diagram(shapes, lines).renderInto(el).shrinkWrap();
+
+      </script>
+    </div>
 
     <script src="guide.js"></script>
 

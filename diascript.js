@@ -108,11 +108,36 @@ class Diagram {
 
     this.shapes.forEach(shape =>
       {
-        if (shape.x === undefined || shape.y === undefined) {
-          console.warn('Top-level shape requires x and y coordinates', shape);
-        } else {
+        if ((shape.x === undefined || shape.y === undefined) && shape['align-to'] === undefined) {
+          console.warn('Top-level shape requires x and y coordinates or an align_to property', shape);
+        }
+      });
+
+    this.shapes.forEach(shape =>
+      {
+        if (shape.x) {
           shape.layout();
           shape.render(shape.x, shape.y).forEach(psvg => appendSvgElement(el, psvg));
+        }
+      });
+
+    this.shapes.forEach(shape =>
+      {
+        if (shape.x == undefined) {
+          const targetId = shape['align-to'];
+          const target = this.shapeById(targetId);
+          if (!target) {
+            console.warn(`Shape ${targetId} not found`, shape);
+          } else if (target.x === undefined) {
+            console.warn(`Shape ${targetId} has not yet been positioned`, shape);
+          } else {
+            shape.layout();
+            const dx = shape.dx || 0;
+            const dy = shape.dy || 0;
+            const x = target.x + target.width / 2 + dx - shape.width / 2;
+            const y = target.y + target.height / 2 + dy - shape.height / 2;
+            shape.render(x, y).forEach(psvg => appendSvgElement(el, psvg));
+          }
         }
       });
 
@@ -154,12 +179,16 @@ class Diagram {
     } else if (this.shapes.length === 0) {
       console.warn("No shapes, can't shrinkWrap");
     } else {
+      const padding = 10;
       const left = Math.max(0, Math.min(...this.shapes.map(shape => shape.x)));
       const top = Math.max(0, Math.min(...this.shapes.map(shape => shape.y)));
       const right = Math.max(...this.shapes.map(shape => shape.x + shape.width));
       const bottom = Math.max(...this.shapes.map(shape => shape.y + shape.height));
-      this.el.setAttribute('width', left + right);
-      this.el.setAttribute('height', top + bottom);
+      const width = right - left + 2 * padding;
+      const height = bottom - top + 2 * padding;
+      this.el.setAttribute('width', width);
+      this.el.setAttribute('height', height);
+      this.el.setAttribute('viewBox', `${left - padding} ${top - padding} ${width} ${height}`);
     }
     return this;
   }
@@ -784,7 +813,6 @@ class User extends Shape {
   render(x, y) {
     this.x = x;
     this.y = y;
-    console.log('attrs', this.svgAttrs());
     return [['path', this.svgAttrs()]];
   }
 
