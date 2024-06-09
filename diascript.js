@@ -115,7 +115,7 @@ class Diagram {
 
     this.shapes.forEach(shape =>
       {
-        if (shape.x) {
+        if (shape.x !== undefined) {
           shape.layout();
           shape.render(shape.x, shape.y).forEach(psvg => appendSvgElement(el, psvg));
         }
